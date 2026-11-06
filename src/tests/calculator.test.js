@@ -2,7 +2,7 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { calculate } = require('../calculator');
+const { calculate, modulo, power, squareRoot } = require('../calculator');
 
 describe('calculate', () => {
   describe('addition', () => {
@@ -60,8 +60,47 @@ describe('calculate', () => {
     });
   });
 
+  describe('modulo', () => {
+    it('returns the remainder and supports negative operands', () => {
+      assert.equal(modulo(5, 2), 1);
+      assert.equal(calculate(5, '%', 2), 1);
+      assert.equal(modulo(10, 3), 1);
+      assert.equal(modulo(-10, 3), -1);
+      assert.equal(calculate(10, '%', 3), 1);
+    });
+
+    it('rejects a zero divisor', () => {
+      assert.throws(() => modulo(1, 0), /Cannot calculate modulo by zero/);
+      assert.throws(() => calculate(1, '%', 0), /Cannot calculate modulo by zero/);
+    });
+  });
+
+  describe('power', () => {
+    it('raises a base to an exponent', () => {
+      assert.equal(power(2, 3), 8);
+      assert.equal(calculate(2, '^', 3), 8);
+      assert.equal(power(2, -2), 0.25);
+    });
+
+    it('rejects results outside the supported numeric range', () => {
+      assert.throws(() => power(10, 1000), /outside the supported numeric range/);
+    });
+  });
+
+  describe('square root', () => {
+    it('returns the square root of non-negative values', () => {
+      assert.equal(squareRoot(9), 3);
+      assert.equal(squareRoot(0), 0);
+    });
+
+    it('rejects negative values and non-finite operands', () => {
+      assert.throws(() => squareRoot(-1), /square root of a negative number/);
+      assert.throws(() => squareRoot(Number.NaN), /finite number/);
+    });
+  });
+
   it('rejects unsupported operators, including inherited object properties', () => {
-    assert.throws(() => calculate(1, '%', 2), /Unsupported operator: %/);
+    assert.throws(() => calculate(1, '?', 2), /Unsupported operator: \?/);
     assert.throws(() => calculate(1, 'constructor', 2), /Unsupported operator/);
     assert.throws(() => calculate(1, '__proto__', 2), /Unsupported operator/);
   });
@@ -94,6 +133,41 @@ describe('calculator CLI', () => {
     assert.equal(result.status, 0);
     assert.equal(result.stdout, '4\n');
     assert.equal(result.stderr, '');
+  });
+
+  it('prints the result for square root', () => {
+    const result = spawnSync(process.execPath, [calculatorPath, 'sqrt', '16'], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, '4\n');
+    assert.equal(result.stderr, '');
+  });
+
+  it('prints results for modulo and power', () => {
+    for (const [first, operator, second, expected] of [
+      ['5', '%', '2', '1\n'],
+      ['2', '^', '3', '8\n'],
+    ]) {
+      const result = spawnSync(process.execPath, [calculatorPath, first, operator, second], {
+        encoding: 'utf8',
+      });
+
+      assert.equal(result.status, 0);
+      assert.equal(result.stdout, expected);
+      assert.equal(result.stderr, '');
+    }
+  });
+
+  it('prints a clear error for a negative square-root input', () => {
+    const result = spawnSync(process.execPath, [calculatorPath, 'sqrt', '-1'], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /square root of a negative number/);
   });
 
   it('prints a clear error and exits unsuccessfully for division by zero', () => {
